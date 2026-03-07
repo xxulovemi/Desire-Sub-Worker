@@ -403,8 +403,16 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
     </div>
 
     <div class="form-group" id="extUrlGroup" style="display: none;">
-        <label>外部 TXT/CSV 链接</label>
-        <input type="text" id="extUrl" placeholder="https://..." value="https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt" autocomplete="off">
+        <label>外部优选库接口 (API 或 TXT)</label>
+        <select id="extUrlSelect" onchange="document.getElementById('extUrl').value = this.value" style="margin-bottom: 8px;">
+            <option value="https://cf.090227.xyz/ct?ips=6">📶 动态测速 API - 电信优先</option>
+            <option value="https://cf.090227.xyz/cu">📶 动态测速 API - 联通优先</option>
+            <option value="https://cf.090227.xyz/cmcc?ips=8">📶 动态测速 API - 移动优先</option>
+            <option value="https://cf.090227.xyz/CloudFlareYes">🌐 动态测速 API - 通用官方</option>
+            <option value="https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt">📦 静态 TXT 库 - cmliu (备用)</option>
+            <option value="">✍️ 自定义：清空并手动输入链接...</option>
+        </select>
+        <input type="text" id="extUrl" placeholder="请选择上方接口或粘贴你的链接..." value="https://cf.090227.xyz/ct?ips=6" autocomplete="off">
     </div>
 
     <div class="form-group">
