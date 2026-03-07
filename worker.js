@@ -4,7 +4,7 @@
 const PAGE_SIZE = 30;
 const BATCH_SIZE = 50;
 const MAX_IPS = 1000; 
-const CACHE_TTL = 60; // 订阅接口缓存时间(秒)
+const CACHE_TTL = 60; 
 const STATS_CACHE_KEY = 'cache:stats';
 const TASK_TTL = 300; 
 
@@ -22,6 +22,11 @@ const json = (d, s = 200) => Response.json(d, { status: s });
 const err = (m, s = 400) => Response.json({ error: m }, { status: s });
 const encodeBase64 = (str) => btoa(unescape(encodeURIComponent(str)));
 const decodeBase64 = (str) => decodeURIComponent(escape(atob(str)));
+
+// 【新增】生成伪装错误节点，让客户端能成功解析并显示报错信息
+const createErrorNode = (msg) => {
+    return `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=tcp#${encodeURIComponent(msg)}`;
+};
 
 const parseIP = (ip) => {
     if (!ip) return { displayIp: '', port: '443', name: '' };
@@ -54,7 +59,10 @@ const multiplexLink = (baseLink, premiumIpRow) => {
             const originalHost = url.hostname;
             url.hostname = displayIp;
             if (port && port !== 'N/A') url.port = port;
-            url.hash = encodeURIComponent(nodeName); 
+            
+            // 【修复】直接赋值即可，URL对象会自动处理编码，避免双重编码导致客户端报错
+            url.hash = nodeName; 
+            
             if (!url.searchParams.has('host') && originalHost) url.searchParams.set('host', originalHost);
             if (!url.searchParams.has('sni') && originalHost) url.searchParams.set('sni', originalHost);
             return url.toString();
@@ -345,8 +353,7 @@ const handleApiRoute = async (req, db, ctx, kv) => {
 };
 
 // ==========================================
-// ==========================================
-// 前端 HTML: 公开生成页面 (新增二维码生成功能)
+// 前端 HTML: 公开生成页面 (附带二维码+下拉选择)
 // ==========================================
 const getPublicHTML = () => `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -363,15 +370,15 @@ body { background-color: #1a1a2e; background-image: url('https://i.111666.best/i
 h1 { font-size: 24px; margin-bottom: 40px; font-weight: 600; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); font-style: italic; }
 .form-group { text-align: left; margin-bottom: 20px; }
 label { display: block; font-size: 14px; margin-bottom: 8px; color: #eaeaea; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
-input { width: 100%; padding: 16px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #fff; font-size: 14px; box-sizing: border-box; transition: all 0.3s ease; }
-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); background: rgba(0, 0, 0, 0.6); }
+input, select { width: 100%; padding: 16px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #fff; font-size: 14px; box-sizing: border-box; transition: all 0.3s ease; }
+input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); background: rgba(0, 0, 0, 0.6); }
 input::placeholder { color: #aaa; }
+select option { color: #000; background: #fff; }
 button { width: 100%; padding: 16px; background: rgba(30, 58, 138, 0.85); color: #fff; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s; margin-bottom: 15px; backdrop-filter: blur(5px); }
 button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px); }
 .footer { margin-top: 30px; font-size: 12px; color: #bbb; line-height: 1.6; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 .tg-link { color: #58a6ff; text-decoration: none; font-weight: bold; transition: color 0.2s; }
 .tg-link:hover { color: #79c0ff; text-decoration: underline; }
-/* 二维码区域样式，带有白色底板防遮挡 */
 #qrWrap { display: none; justify-content: center; margin-top: 25px; animation: fadeIn 0.5s ease; }
 #qrCodeBox { background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -381,10 +388,25 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
 <div class="card">
     <div class="avatar"><img src="https://i.111666.best/image/xbqCQcpf3LiIw6pBymZyX1.jpg" alt="Logo"></div>
     <h1>Desire优选订阅</h1>
+    
     <div class="form-group">
         <label>基础节点链接</label>
         <input type="text" id="nodeLink" placeholder="请输入 VMess / VLESS / Trojan 链接" autocomplete="off">
     </div>
+
+    <div class="form-group">
+        <label>优选 IP 来源</label>
+        <select id="ipSource" onchange="toggleExtInput()">
+            <option value="local">本地私有优选库 (高稳定)</option>
+            <option value="ext">外部公开优选库 (实时拉取)</option>
+        </select>
+    </div>
+
+    <div class="form-group" id="extUrlGroup" style="display: none;">
+        <label>外部 TXT/CSV 链接</label>
+        <input type="text" id="extUrl" placeholder="https://..." value="https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt" autocomplete="off">
+    </div>
+
     <div class="form-group">
         <label>
             安全 Token (可选)
@@ -392,7 +414,9 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
         </label>
         <input type="password" id="subToken" placeholder="若后台设置了 SUB_TOKEN 请输入，否则留空" autocomplete="off">
     </div>
+
     <button onclick="generateSub()" id="genBtn" style="margin-top:10px;">生成优选订阅</button>
+    
     <div class="form-group" style="margin-top: 20px;">
         <label>您的专属订阅 ❗</label>
         <input type="text" id="subResult" placeholder="点击生成后自动出现" readonly onclick="copyLink()">
@@ -407,36 +431,41 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
     </div>
 </div>
 <script>
+function toggleExtInput() {
+    const val = document.getElementById('ipSource').value;
+    document.getElementById('extUrlGroup').style.display = val === 'ext' ? 'block' : 'none';
+}
+
 function generateSub() {
     const link = document.getElementById('nodeLink').value.trim();
     const token = document.getElementById('subToken').value.trim();
+    const source = document.getElementById('ipSource').value;
+    const extUrl = document.getElementById('extUrl').value.trim();
+
     if (!link) { alert('哎呀，你还没有填入节点链接哦！'); return; }
+    if (source === 'ext' && !extUrl) { alert('请填写外部优选链接！'); return; }
+
     const btn = document.getElementById('genBtn');
     btn.innerText = "生成中..."; btn.style.opacity = "0.7";
     
     setTimeout(() => {
         let subUrl = window.location.origin + '/sub?base=' + encodeURIComponent(link);
         if(token) subUrl += '&token=' + encodeURIComponent(token);
+        if(source === 'ext') subUrl += '&source=ext&ext_url=' + encodeURIComponent(extUrl);
         
-        // 1. 填充链接到输入框
         document.getElementById('subResult').value = subUrl;
         btn.innerText = "生成优选订阅"; btn.style.opacity = "1";
         
-        // 2. 生成二维码
         const qrWrap = document.getElementById('qrWrap');
         const qrCodeBox = document.getElementById('qrCodeBox');
-        qrCodeBox.innerHTML = ''; // 清空之前的旧二维码
-        qrWrap.style.display = 'flex'; // 显示二维码区域
+        qrCodeBox.innerHTML = ''; 
+        qrWrap.style.display = 'flex'; 
         
         new QRCode(qrCodeBox, {
-            text: subUrl,
-            width: 180,
-            height: 180,
-            colorDark : "#000000",
-            colorLight : "#ffffff",
+            text: subUrl, width: 180, height: 180,
+            colorDark : "#000000", colorLight : "#ffffff",
             correctLevel : QRCode.CorrectLevel.M
         });
-        
     }, 300);
 }
 function copyLink() {
@@ -448,7 +477,7 @@ function copyLink() {
 </html>`;
 
 // ==========================================
-// 前端 HTML: 后台优选 IP 管理面板 (防抖搜索与移动端优化)
+// 前端 HTML: 后台优选 IP 管理面板
 // ==========================================
 const getAdminHTML = () => `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -481,7 +510,7 @@ button.page-btn{padding:8px 14px; margin:0;}
 button.page-btn.active{background:var(--blue); color:#fff; cursor:default; opacity:1;}
 .ip-list{list-style:none;}
 .ip-item{display:flex;justify-content:space-between;align-items:center;padding:16px;background:var(--bg3);border:1px solid var(--border);margin-bottom:8px;border-radius:8px; flex-wrap: wrap; gap: 10px;}
-.ip-address { font-family:monospace; font-size:16px; color:var(--fg); word-break: break-all; } /* 解决超长IP换行问题 */
+.ip-address { font-family:monospace; font-size:16px; color:var(--fg); word-break: break-all; } 
 .ip-meta{font-size:13px;color:var(--fg2);margin-top:4px}
 .tag{background:rgba(88,166,255,0.1);color:var(--blue);padding:2px 8px;border-radius:4px;font-size:12px;margin-right:6px}
 .action-buttons{display: flex; gap: 8px; flex-wrap: wrap; align-items: center;}
@@ -491,7 +520,6 @@ button.page-btn.active{background:var(--blue); color:#fff; cursor:default; opaci
 .search-box input { margin-bottom:0; flex:1; min-width:200px; }
 .page-badge { color:var(--fg2); font-size:14px; background:var(--bg3); padding:6px 14px; border-radius:20px; border:1px solid var(--border); }
 
-/* 移动端专属优化 */
 @media (max-width: 768px) {
     .container { padding: 15px 12px; }
     .header { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
@@ -575,22 +603,12 @@ const $ = id => document.getElementById(id);
 const msg = t => { $('msg').innerText = t; setTimeout(() => $('msg').innerText='', 3000) };
 const api = async (p, o={}) => { const r = await fetch('/api'+p, {headers:{'Content-Type':'application/json'}, ...o}); return r.json(); };
 
-// --- 防抖搜索逻辑 ---
 $('searchInput').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        currentKeyword = e.target.value.trim();
-        page = 1;
-        load();
-    }, 500); // 停顿 500ms 后自动请求
+    searchTimeout = setTimeout(() => { currentKeyword = e.target.value.trim(); page = 1; load(); }, 500); 
 });
 
-const clearSearch = () => {
-    $('searchInput').value = '';
-    currentKeyword = '';
-    page = 1;
-    load();
-};
+const clearSearch = () => { $('searchInput').value = ''; currentKeyword = ''; page = 1; load(); };
 
 const load = async () => {
     const query = new URLSearchParams({ page, needTotal: 'true' });
@@ -729,41 +747,78 @@ export default {
             });
         }
 
-        // --- /sub 接口：支持防白嫖 Token 验证 和 边缘缓存保护 ---
+        // --- /sub 接口：终极防爆修复版 ---
         if (path === '/sub') {
             const baseLink = url.searchParams.get('base');
             const reqToken = url.searchParams.get('token');
+            const source = url.searchParams.get('source'); 
+            const extUrl = url.searchParams.get('ext_url');
 
             // 1. Token 校验
             const expectedToken = env.SUB_TOKEN;
             if (expectedToken && reqToken !== expectedToken) {
-                return new Response(encodeBase64('❌ Token 验证失败，请联系管理员或检查链接参数'), { 
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
+                return new Response(encodeBase64(createErrorNode('❌ Token 验证失败，请检查链接参数')), { 
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Cache-Control': 'no-cache' } 
                 });
             }
 
-            if (!baseLink) return new Response(encodeBase64('请在首页输入节点链接获取订阅'), {
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+            if (!baseLink) return new Response(encodeBase64(createErrorNode('❌ 请在首页输入基础节点链接')), {
+                headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Cache-Control': 'no-cache' }
             });
 
-            // 2. 边缘缓存读取
+            // 2. 缓存读取
             const cache = caches.default;
-            const cacheKey = new Request(url.toString(), req); // 以当前完整URL作为缓存键
+            const cacheKey = new Request(url.toString(), req); 
             let res = await cache.match(cacheKey);
             if (res) return res;
 
-            // 3. 查询数据库与组装
-            const { results } = await env.DB.prepare(
-                'SELECT ip, name FROM ips WHERE active=1 ORDER BY priority, id LIMIT ?'
-            ).bind(MAX_IPS).all();
+            let ipRows = [];
 
-            const generatedLinks = results
+            // 3. 获取数据源
+            if (source === 'ext' && extUrl) {
+                try {
+                    // 加上 User-Agent 伪装，防止被部分外部链接的防火墙拦截
+                    const extRes = await fetch(extUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }});
+                    if (!extRes.ok) throw new Error(`HTTP状态码异常: ${extRes.status}`);
+                    
+                    const extText = await extRes.text();
+                    
+                    // 防御检查：如果拉取到的内容是 HTML（比如防CC盾、404网页），直接报错，防止生成无效节点
+                    if (extText.trim().startsWith('<')) {
+                        throw new Error('获取到的是网页而非纯文本列表，可能是链接失效或触发了防CC拦截');
+                    }
+
+                    const lines = extText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+                    ipRows = lines.map(line => {
+                        const { displayIp, port, name } = parseIP(line);
+                        return { 
+                            ip: port === 'N/A' ? displayIp : `${displayIp}:${port}`, 
+                            name: name || '外网优选节点' 
+                        };
+                    }).filter(r => r.ip);
+                } catch (e) {
+                    // 核心修复：如果是外部拉取报错，返回一个伪装的 VLESS 节点，将错误原因直接显示在客户端列表里！
+                    return new Response(encodeBase64(createErrorNode(`❌ 外部优选库拉取失败: ${e.message}`)), {
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Cache-Control': 'no-cache' }
+                    });
+                }
+            } else {
+                const { results } = await env.DB.prepare(
+                    'SELECT ip, name FROM ips WHERE active=1 ORDER BY priority, id LIMIT ?'
+                ).bind(MAX_IPS).all();
+                ipRows = results;
+            }
+
+            // 4. 合并裂变
+            const generatedLinks = ipRows
                 .map(row => multiplexLink(baseLink, row))
                 .filter(Boolean)
                 .join('\n');
 
-            // 4. 写入缓存并返回 (设置缓存时间为 CACHE_TTL 秒)
-            res = new Response(encodeBase64(generatedLinks || '暂无可用优选IP节点'), {
+            // 5. 兜底检查
+            const finalOutput = generatedLinks || createErrorNode('❌ 没有生成任何可用节点(可能是基础节点格式不兼容或无优选IP)');
+
+            res = new Response(encodeBase64(finalOutput), {
                 headers: {
                     'Content-Type': 'text/plain;charset=utf-8',
                     'Cache-Control': `public, max-age=${CACHE_TTL}`
