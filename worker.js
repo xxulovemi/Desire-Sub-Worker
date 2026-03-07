@@ -345,7 +345,8 @@ const handleApiRoute = async (req, db, ctx, kv) => {
 };
 
 // ==========================================
-// 前端 HTML: 公开生成页面 (含 Token 安全校验输入)
+// ==========================================
+// 前端 HTML: 公开生成页面 (新增二维码生成功能)
 // ==========================================
 const getPublicHTML = () => `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -353,6 +354,7 @@ const getPublicHTML = () => `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Desire优选订阅</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 body { background-color: #1a1a2e; background-image: url('https://i.111666.best/image/L6tgIQjXZPVK7s41baZtlG.JPG'); background-size: cover; background-position: center; background-attachment: fixed; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
 .card { background: rgba(44, 44, 44, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); padding: 40px; border-radius: 20px; width: 100%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-align: center; border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -369,6 +371,10 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
 .footer { margin-top: 30px; font-size: 12px; color: #bbb; line-height: 1.6; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 .tg-link { color: #58a6ff; text-decoration: none; font-weight: bold; transition: color 0.2s; }
 .tg-link:hover { color: #79c0ff; text-decoration: underline; }
+/* 二维码区域样式，带有白色底板防遮挡 */
+#qrWrap { display: none; justify-content: center; margin-top: 25px; animation: fadeIn 0.5s ease; }
+#qrCodeBox { background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 </head>
 <body>
@@ -382,7 +388,7 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
     <div class="form-group">
         <label>
             安全 Token (可选)
-            <a href="https://t.me/ayonayo" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(前往获取)</a>
+            <a href="https://t.me/ayonayo" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(Desire用户主页获取)</a>
         </label>
         <input type="password" id="subToken" placeholder="若后台设置了 SUB_TOKEN 请输入，否则留空" autocomplete="off">
     </div>
@@ -391,6 +397,11 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
         <label>您的专属订阅 ❗</label>
         <input type="text" id="subResult" placeholder="点击生成后自动出现" readonly onclick="copyLink()">
     </div>
+    
+    <div id="qrWrap">
+        <div id="qrCodeBox"></div>
+    </div>
+
     <div class="footer">
         支持: <a href="https://t.me/mianfeicf" target="_blank" class="tg-link">加入tg群组获取最新动态</a> - 由群友Desire提供维护 &copy; 2026
     </div>
@@ -406,8 +417,26 @@ function generateSub() {
     setTimeout(() => {
         let subUrl = window.location.origin + '/sub?base=' + encodeURIComponent(link);
         if(token) subUrl += '&token=' + encodeURIComponent(token);
+        
+        // 1. 填充链接到输入框
         document.getElementById('subResult').value = subUrl;
         btn.innerText = "生成优选订阅"; btn.style.opacity = "1";
+        
+        // 2. 生成二维码
+        const qrWrap = document.getElementById('qrWrap');
+        const qrCodeBox = document.getElementById('qrCodeBox');
+        qrCodeBox.innerHTML = ''; // 清空之前的旧二维码
+        qrWrap.style.display = 'flex'; // 显示二维码区域
+        
+        new QRCode(qrCodeBox, {
+            text: subUrl,
+            width: 180,
+            height: 180,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.M
+        });
+        
     }, 300);
 }
 function copyLink() {
