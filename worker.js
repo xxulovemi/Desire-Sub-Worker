@@ -417,10 +417,10 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
 
     <div class="form-group">
         <label>
-            安全 Token (可选)
-            <a href="https://t.me/ayonayo" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(Desire用户主页获取)</a>
+            安全 Token (必填!)
+            <a href="https://t.me/ayonayo" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(前往获取)</a>
         </label>
-        <input type="password" id="subToken" placeholder="若后台设置了 SUB_TOKEN 请输入，否则留空" autocomplete="off">
+        <input type="password" id="subToken" placeholder="防止接口被他人滥用生成订阅, 请输入" autocomplete="off">
     </div>
 
     <button onclick="generateSub()" id="genBtn" style="margin-top:10px;">生成优选订阅</button>
