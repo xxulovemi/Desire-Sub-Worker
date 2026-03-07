@@ -1,0 +1,19 @@
+name = "desire-sub-worker"
+main = "worker.js"
+compatibility_date = "2024-03-07"
+
+# 绑定 KV 命名空间 (用于缓存和任务状态)
+[[kv_namespaces]]
+binding = "TASK_KV"
+id = "请替换为你的_KV_ID"
+
+# 绑定 D1 数据库 (用于存储优选 IP)
+[[d1_databases]]
+binding = "DB"
+database_name = "sub-db"
+database_id = "请替换为你的_D1_数据库_ID"
+
+# --- 环境变量建议在 Cloudflare 后台面板设置以保证安全 ---
+# [vars]
+# ADMIN_PASSWORD = "your_admin_password" 
+# SUB_TOKEN = "your_sub_token"
