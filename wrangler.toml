@@ -14,6 +14,6 @@ database_name = "sub-db"
 database_id = "fbe1713b-c308-41e7-be4b-1c5d323e108e"
 
 # --- 环境变量建议在 Cloudflare 后台面板设置以保证安全 ---
-# [vars]
+[vars]
 ADMIN_PASSWORD = "xxulovemi" 
 SUB_TOKEN = "xxulovemi"
