@@ -1,4 +1,4 @@
-name = "desire-sub-worker"
+name = "desire-sub"
 main = "worker.js"
 compatibility_date = "2024-03-07"
 
