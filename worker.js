@@ -630,10 +630,16 @@ button.page-btn.active{background:var(--blue); color:#fff; cursor:default; opaci
     <div style="background:var(--bg2); border-radius:var(--radius); padding:24px; width:100%; max-width:400px; border:1px solid var(--border); box-shadow: 0 4px 24px rgba(0,0,0,0.5);">
         <h2 style="margin-top:0; color:var(--fg); font-size:20px;">编辑节点信息</h2>
         <input id="editId" type="hidden">
+        
         <label style="display:block; font-size:13px; color:var(--fg2); margin-bottom:6px;">IP 和 端口</label>
         <input id="editIp" placeholder="例如 104.16.2.3:443" style="margin-bottom:16px;">
+        
         <label style="display:block; font-size:13px; color:var(--fg2); margin-bottom:6px;">备注名称</label>
-        <input id="editName" placeholder="例如 香港优选 (选填)" style="margin-bottom:8px;">
+        <input id="editName" placeholder="例如 香港优选 (选填)" style="margin-bottom:16px;">
+        
+        <label style="display:block; font-size:13px; color:var(--fg2); margin-bottom:6px;">排序权重 (越小越靠前，置顶可填 0 或 -1)</label>
+        <input id="editPriority" type="number" placeholder="数字越小越靠前" style="margin-bottom:8px;">
+
         <div style="display:flex; gap:10px; margin-top:20px;">
             <button style="flex:1;" onclick="saveEdit()">保存修改</button>
             <button style="flex:1;" class="sec" onclick="closeEdit()">取消</button>
@@ -678,7 +684,7 @@ const load = async () => {
                 </div>
             </div>
             <div style="display:flex; gap:6px; flex-wrap:wrap; width:100%; justify-content: flex-end;">
-                <button class="sec" onclick="openEdit(\${ip.id}, '\${ip.displayIp}', '\${ip.port}', '\${ip.name || ''}')">编辑</button>
+                <button class="sec" onclick="openEdit(\${ip.id}, '\${ip.displayIp}', '\${ip.port}', '\${ip.name || ''}', \${ip.priority || 0})">编辑</button>
                 <button class="sec" onclick="toggleIp(\${ip.id}, \${ip.active})">\${ip.active?'禁用':'启用'}</button>
                 <button class="danger" onclick="del(\${ip.id})">删除</button>
             </div>
@@ -719,13 +725,35 @@ const poll = (id, cb) => {
 };
 
 const toggleIp = async (id, currentStatus) => { await api('/ips/'+id, {method:'PUT', body:JSON.stringify({active: currentStatus ? 0 : 1})}); load(); };
-const openEdit = (id, ip, port, name) => { $('editId').value = id; $('editIp').value = ip + ':' + port; $('editName').value = name; $('editModal').style.display = 'flex'; };
+const openEdit = (id, ip, port, name, priority) => { 
+    $('editId').value = id; 
+    $('editIp').value = ip + ':' + port; 
+    $('editName').value = name; 
+    $('editPriority').value = priority; // 新增：将权重回显到输入框
+    $('editModal').style.display = 'flex'; 
+};
 const closeEdit = () => { $('editModal').style.display = 'none'; };
 const saveEdit = async () => {
-    const id = $('editId').value, ipStr = $('editIp').value.trim(), nameStr = $('editName').value.trim();
+    const id = $('editId').value;
+    const ipStr = $('editIp').value.trim();
+    const nameStr = $('editName').value.trim();
+    const priorityVal = parseInt($('editPriority').value); // 读取权重输入框的值
+
     if(!ipStr) return msg('IP不能为空');
     let fullIP = ipStr; if(nameStr) fullIP += '#' + nameStr;
-    try { await api('/ips/'+id, {method:'PUT', body:JSON.stringify({ip: fullIP})}); msg('修改成功'); closeEdit(); load(); } catch(e) { msg('修改失败，格式错误'); }
+
+    // 构造发送给后端的数据包
+    const updateBody = { ip: fullIP };
+    if (!isNaN(priorityVal)) updateBody.priority = priorityVal; 
+
+    try { 
+        await api('/ips/'+id, {method:'PUT', body:JSON.stringify(updateBody)}); 
+        msg('修改成功'); 
+        closeEdit(); 
+        load(); 
+    } catch(e) { 
+        msg('修改失败，格式错误'); 
+    }
 };
 const del = async (id) => { if(confirm('确定要彻底删除此IP吗？')) { await api('/ips/'+id, {method:'DELETE'}); load(); } };
 
