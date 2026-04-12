@@ -23,7 +23,7 @@ const err = (m, s = 400) => Response.json({ error: m }, { status: s });
 const encodeBase64 = (str) => btoa(unescape(encodeURIComponent(str)));
 const decodeBase64 = (str) => decodeURIComponent(escape(atob(str)));
 
-// 【新增】生成伪装错误节点，让客户端能成功解析并显示报错信息
+// 生成伪装错误节点，让客户端能成功解析并显示报错信息
 const createErrorNode = (msg) => {
     return `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=tcp#${encodeURIComponent(msg)}`;
 };
@@ -60,7 +60,7 @@ const multiplexLink = (baseLink, premiumIpRow) => {
             url.hostname = displayIp;
             if (port && port !== 'N/A') url.port = port;
             
-            // 【修复】直接赋值即可，URL对象会自动处理编码，避免双重编码导致客户端报错
+            // 直接赋值即可，URL对象会自动处理编码，避免双重编码导致客户端报错
             url.hash = nodeName; 
             
             if (!url.searchParams.has('host') && originalHost) url.searchParams.set('host', originalHost);
@@ -360,10 +360,10 @@ const getPublicHTML = () => `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Desire优选订阅</title>
+<title>YOUR_BRAND_NAME优选订阅</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
-body { background-color: #1a1a2e; background-image: url('https://i.111666.best/image/L6tgIQjXZPVK7s41baZtlG.JPG'); background-size: cover; background-position: center; background-attachment: fixed; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+body { background-color: #1a1a2e; background-image: url('YOUR_BACKGROUND_IMAGE_URL'); background-size: cover; background-position: center; background-attachment: fixed; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
 .card { background: rgba(44, 44, 44, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); padding: 40px; border-radius: 20px; width: 100%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-align: center; border: 1px solid rgba(255, 255, 255, 0.1); }
 .avatar { width: 80px; height: 80px; border-radius: 50%; background: #fff; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 40px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -386,8 +386,8 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
 </head>
 <body>
 <div class="card">
-    <div class="avatar"><img src="https://i.111666.best/image/xbqCQcpf3LiIw6pBymZyX1.jpg" alt="Logo"></div>
-    <h1>Desire优选订阅</h1>
+    <div class="avatar"><img src="YOUR_AVATAR_IMAGE_URL" alt="Logo"></div>
+    <h1>YOUR_BRAND_NAME优选订阅</h1>
     
     <div class="form-group">
         <label>基础节点链接</label>
@@ -405,20 +405,20 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
     <div class="form-group" id="extUrlGroup" style="display: none;">
         <label>外部优选库接口 (API 或 TXT)</label>
         <select id="extUrlSelect" onchange="document.getElementById('extUrl').value = this.value" style="margin-bottom: 8px;">
-            <option value="https://cf.090227.xyz/ct?ips=6">📶 动态测速 API - 电信优先</option>
-            <option value="https://cf.090227.xyz/cu">📶 动态测速 API - 联通优先</option>
-            <option value="https://cf.090227.xyz/cmcc?ips=8">📶 动态测速 API - 移动优先</option>
-            <option value="https://cf.090227.xyz/CloudFlareYes">🌐 动态测速 API - 通用官方</option>
+            <option value="https://api.example.com/ct?ips=6">📶 动态测速 API - 电信优先</option>
+            <option value="https://api.example.com/cu">📶 动态测速 API - 联通优先</option>
+            <option value="https://api.example.com/cmcc?ips=8">📶 动态测速 API - 移动优先</option>
+            <option value="https://api.example.com/CloudFlareYes">🌐 动态测速 API - 通用官方</option>
             <option value="https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt">📦 静态 TXT 库 - cmliu (备用)</option>
             <option value="">✍️ 自定义：清空并手动输入链接...</option>
         </select>
-        <input type="text" id="extUrl" placeholder="请选择上方接口或粘贴你的链接..." value="https://cf.090227.xyz/ct?ips=6" autocomplete="off">
+        <input type="text" id="extUrl" placeholder="请选择上方接口或粘贴你的链接..." value="https://api.example.com/ct?ips=6" autocomplete="off">
     </div>
 
     <div class="form-group">
         <label>
             安全 Token (必填!)
-            <a href="https://t.me/ayonayo" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(前往获取)</a>
+            <a href="https://t.me/YOUR_TELEGRAM" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(前往获取)</a>
         </label>
         <input type="password" id="subToken" placeholder="防止接口被他人滥用生成订阅, 请输入" autocomplete="off">
     </div>
@@ -435,7 +435,7 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
     </div>
 
     <div class="footer">
-        支持: <a href="https://t.me/mianfeicf" target="_blank" class="tg-link">加入tg群组获取最新动态</a> - 由群友Desire提供维护 &copy; 2026
+        支持: <a href="https://t.me/YOUR_GROUP" target="_blank" class="tg-link">加入tg群组获取最新动态</a> - 由 YOUR_NAME 提供维护 &copy; 2026
     </div>
 </div>
 <script>
