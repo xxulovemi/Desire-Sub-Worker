@@ -4,7 +4,7 @@
 const PAGE_SIZE = 30;
 const BATCH_SIZE = 50;
 const MAX_IPS = 1000; 
-const CACHE_TTL = 60; 
+const CACHE_TTL = 60;
 const STATS_CACHE_KEY = 'cache:stats';
 const TASK_TTL = 300; 
 
@@ -61,7 +61,7 @@ const multiplexLink = (baseLink, premiumIpRow) => {
             if (port && port !== 'N/A') url.port = port;
             
             // 直接赋值即可，URL对象会自动处理编码，避免双重编码导致客户端报错
-            url.hash = nodeName; 
+            url.hash = nodeName;
             
             if (!url.searchParams.has('host') && originalHost) url.searchParams.set('host', originalHost);
             if (!url.searchParams.has('sni') && originalHost) url.searchParams.set('sni', originalHost);
@@ -78,7 +78,7 @@ const multiplexLink = (baseLink, premiumIpRow) => {
             return 'vmess://' + encodeBase64(JSON.stringify(config));
         }
     } catch (e) {
-        return null; 
+        return null;
     }
     return null;
 };
@@ -332,6 +332,20 @@ const handleApiRoute = async (req, db, ctx, kv) => {
     const method = req.method;
     try {
         const body = (method === 'POST' || method === 'PUT') ? await req.json().catch(() => ({})) : {};
+        
+        // --- 【新增】处理短链生成的 API ---
+        if (path === '/shorten' && method === 'POST') {
+            const { longUrl } = body;
+            if (!longUrl) return err('链接不能为空');
+            // 生成 6 位随机短码
+            const shortId = Math.random().toString(36).substring(2, 8);
+            if (kv) {
+                await kv.put(`short:${shortId}`, longUrl);
+                return json({ success: true, shortId });
+            }
+            return err('未绑定 KV 空间', 500);
+        }
+
         if (path === '/ips' && method === 'GET') return api.getIps(db, url.searchParams);
         if (path === '/ips' && method === 'POST') return api.addIp(db, body, kv);
         if (path === '/ips/stats') return api.getStats(db, kv);
@@ -353,7 +367,7 @@ const handleApiRoute = async (req, db, ctx, kv) => {
 };
 
 // ==========================================
-// 前端 HTML: 公开生成页面 (附带二维码+下拉选择)
+// 前端 HTML: 公开生成页面 (已脱敏 + 支持短链)
 // ==========================================
 const getPublicHTML = () => `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -376,6 +390,7 @@ input::placeholder { color: #aaa; }
 select option { color: #000; background: #fff; }
 button { width: 100%; padding: 16px; background: rgba(30, 58, 138, 0.85); color: #fff; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s; margin-bottom: 15px; backdrop-filter: blur(5px); }
 button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px); }
+button:disabled { opacity: 0.7; cursor: not-allowed; }
 .footer { margin-top: 30px; font-size: 12px; color: #bbb; line-height: 1.6; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 .tg-link { color: #58a6ff; text-decoration: none; font-weight: bold; transition: color 0.2s; }
 .tg-link:hover { color: #79c0ff; text-decoration: underline; }
@@ -423,7 +438,7 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
         <input type="password" id="subToken" placeholder="防止接口被他人滥用生成订阅, 请输入" autocomplete="off">
     </div>
 
-    <button onclick="generateSub()" id="genBtn" style="margin-top:10px;">生成优选订阅</button>
+    <button onclick="generateSub()" id="genBtn" style="margin-top:10px;">生成优选短链</button>
     
     <div class="form-group" style="margin-top: 20px;">
         <label>您的专属订阅 ❗</label>
@@ -444,7 +459,7 @@ function toggleExtInput() {
     document.getElementById('extUrlGroup').style.display = val === 'ext' ? 'block' : 'none';
 }
 
-function generateSub() {
+async function generateSub() {
     const link = document.getElementById('nodeLink').value.trim();
     const token = document.getElementById('subToken').value.trim();
     const source = document.getElementById('ipSource').value;
@@ -455,27 +470,52 @@ function generateSub() {
 
     const btn = document.getElementById('genBtn');
     btn.innerText = "生成中..."; btn.style.opacity = "0.7";
+    btn.disabled = true;
     
-    setTimeout(() => {
-        let subUrl = window.location.origin + '/sub?base=' + encodeURIComponent(link);
-        if(token) subUrl += '&token=' + encodeURIComponent(token);
-        if(source === 'ext') subUrl += '&source=ext&ext_url=' + encodeURIComponent(extUrl);
-        
-        document.getElementById('subResult').value = subUrl;
-        btn.innerText = "生成优选订阅"; btn.style.opacity = "1";
-        
-        const qrWrap = document.getElementById('qrWrap');
-        const qrCodeBox = document.getElementById('qrCodeBox');
-        qrCodeBox.innerHTML = ''; 
-        qrWrap.style.display = 'flex'; 
-        
-        new QRCode(qrCodeBox, {
-            text: subUrl, width: 180, height: 180,
-            colorDark : "#000000", colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.M
+    // 1. 拼接原有的参数
+    let subParams = '/sub?base=' + encodeURIComponent(link);
+    if(token) subParams += '&token=' + encodeURIComponent(token);
+    if(source === 'ext') subParams += '&source=ext&ext_url=' + encodeURIComponent(extUrl);
+    
+    try {
+        // 2. 调用 API 生成短链
+        const res = await fetch('/api/shorten', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ longUrl: subParams })
         });
-    }, 300);
+        const data = await res.json();
+
+        if (data.success) {
+            // 3. 组装最终的短链显示给用户
+            const shortUrl = window.location.origin + '/s/' + data.shortId;
+            document.getElementById('subResult').value = shortUrl;
+            
+            // 生成二维码
+            const qrWrap = document.getElementById('qrWrap');
+            const qrCodeBox = document.getElementById('qrCodeBox');
+            qrCodeBox.innerHTML = ''; 
+            qrWrap.style.display = 'flex'; 
+            
+            new QRCode(qrCodeBox, {
+                text: shortUrl, width: 180, height: 180,
+                colorDark : "#000000", colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.M
+            });
+        } else {
+            alert('生成短链失败: ' + (data.error || '未知错误'));
+            document.getElementById('subResult').value = window.location.origin + subParams; // 降级显示长链
+        }
+    } catch (e) {
+        alert('网络请求失败，请检查控制台。');
+        document.getElementById('subResult').value = window.location.origin + subParams; // 降级显示长链
+    } finally {
+        btn.innerText = "生成优选短链"; 
+        btn.style.opacity = "1";
+        btn.disabled = false;
+    }
 }
+
 function copyLink() {
     const res = document.getElementById('subResult');
     if(res.value) { res.select(); document.execCommand('copy'); alert('✅ 订阅链接已复制！快去客户端添加吧。'); }
@@ -733,9 +773,23 @@ export default {
         const url = new URL(req.url);
         const path = url.pathname;
 
+        // --- 【新增】处理短链跳转 (公开接口，无密码拦截) ---
+        if (path.startsWith('/s/')) {
+            const shortId = path.slice(3); // 截取 /s/ 后面的字符
+            if (env.TASK_KV) {
+                const longUrl = await env.TASK_KV.get(`short:${shortId}`);
+                if (longUrl) {
+                    // 使用 302 重定向到真实的 /sub 长链接，并将原长链自动拼在域名后
+                    return Response.redirect(new URL(longUrl, url.origin).toString(), 302);
+                }
+            }
+            return new Response('❌ 短链接无效或已过期', { status: 404, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+        }
+
         // 安全拦截区
         if (path === '/admin' || path.startsWith('/api/')) {
-            if (!checkAuth(req, env)) {
+            // 放行公开的 /api/shorten 接口，避免前端无法生成短链
+            if (path !== '/api/shorten' && !checkAuth(req, env)) {
                 return new Response('Unauthorized', {
                     status: 401,
                     headers: { 'WWW-Authenticate': 'Basic realm="Admin Access Requires Password"' }
