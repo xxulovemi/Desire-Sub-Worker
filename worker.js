@@ -4,7 +4,7 @@
 const PAGE_SIZE = 30;
 const BATCH_SIZE = 50;
 const MAX_IPS = 1000; 
-const CACHE_TTL = 60; 
+const CACHE_TTL = 60;
 const STATS_CACHE_KEY = 'cache:stats';
 const TASK_TTL = 300; 
 
@@ -23,7 +23,7 @@ const err = (m, s = 400) => Response.json({ error: m }, { status: s });
 const encodeBase64 = (str) => btoa(unescape(encodeURIComponent(str)));
 const decodeBase64 = (str) => decodeURIComponent(escape(atob(str)));
 
-// 【新增】生成伪装错误节点，让客户端能成功解析并显示报错信息
+// 生成伪装错误节点，让客户端能成功解析并显示报错信息
 const createErrorNode = (msg) => {
     return `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=tcp#${encodeURIComponent(msg)}`;
 };
@@ -60,8 +60,8 @@ const multiplexLink = (baseLink, premiumIpRow) => {
             url.hostname = displayIp;
             if (port && port !== 'N/A') url.port = port;
             
-            // 【修复】直接赋值即可，URL对象会自动处理编码，避免双重编码导致客户端报错
-            url.hash = nodeName; 
+            // 直接赋值即可，URL对象会自动处理编码，避免双重编码导致客户端报错
+            url.hash = nodeName;
             
             if (!url.searchParams.has('host') && originalHost) url.searchParams.set('host', originalHost);
             if (!url.searchParams.has('sni') && originalHost) url.searchParams.set('sni', originalHost);
@@ -78,7 +78,7 @@ const multiplexLink = (baseLink, premiumIpRow) => {
             return 'vmess://' + encodeBase64(JSON.stringify(config));
         }
     } catch (e) {
-        return null; 
+        return null;
     }
     return null;
 };
@@ -332,6 +332,20 @@ const handleApiRoute = async (req, db, ctx, kv) => {
     const method = req.method;
     try {
         const body = (method === 'POST' || method === 'PUT') ? await req.json().catch(() => ({})) : {};
+        
+        // --- 【新增】处理短链生成的 API ---
+        if (path === '/shorten' && method === 'POST') {
+            const { longUrl } = body;
+            if (!longUrl) return err('链接不能为空');
+            // 生成 6 位随机短码
+            const shortId = Math.random().toString(36).substring(2, 8);
+            if (kv) {
+                await kv.put(`short:${shortId}`, longUrl);
+                return json({ success: true, shortId });
+            }
+            return err('未绑定 KV 空间', 500);
+        }
+
         if (path === '/ips' && method === 'GET') return api.getIps(db, url.searchParams);
         if (path === '/ips' && method === 'POST') return api.addIp(db, body, kv);
         if (path === '/ips/stats') return api.getStats(db, kv);
@@ -353,17 +367,17 @@ const handleApiRoute = async (req, db, ctx, kv) => {
 };
 
 // ==========================================
-// 前端 HTML: 公开生成页面 (附带二维码+下拉选择)
+// 前端 HTML: 公开生成页面 (已脱敏 + 支持短链)
 // ==========================================
 const getPublicHTML = () => `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Desire优选订阅</title>
+<title>YOUR_BRAND_NAME优选订阅</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
-body { background-color: #1a1a2e; background-image: url('https://i.111666.best/image/L6tgIQjXZPVK7s41baZtlG.JPG'); background-size: cover; background-position: center; background-attachment: fixed; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+body { background-color: #1a1a2e; background-image: url('YOUR_BACKGROUND_IMAGE_URL'); background-size: cover; background-position: center; background-attachment: fixed; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
 .card { background: rgba(44, 44, 44, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); padding: 40px; border-radius: 20px; width: 100%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-align: center; border: 1px solid rgba(255, 255, 255, 0.1); }
 .avatar { width: 80px; height: 80px; border-radius: 50%; background: #fff; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 40px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -376,6 +390,7 @@ input::placeholder { color: #aaa; }
 select option { color: #000; background: #fff; }
 button { width: 100%; padding: 16px; background: rgba(30, 58, 138, 0.85); color: #fff; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s; margin-bottom: 15px; backdrop-filter: blur(5px); }
 button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px); }
+button:disabled { opacity: 0.7; cursor: not-allowed; }
 .footer { margin-top: 30px; font-size: 12px; color: #bbb; line-height: 1.6; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 .tg-link { color: #58a6ff; text-decoration: none; font-weight: bold; transition: color 0.2s; }
 .tg-link:hover { color: #79c0ff; text-decoration: underline; }
@@ -386,8 +401,8 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
 </head>
 <body>
 <div class="card">
-    <div class="avatar"><img src="https://i.111666.best/image/xbqCQcpf3LiIw6pBymZyX1.jpg" alt="Logo"></div>
-    <h1>Desire优选订阅</h1>
+    <div class="avatar"><img src="YOUR_AVATAR_IMAGE_URL" alt="Logo"></div>
+    <h1>YOUR_BRAND_NAME优选订阅</h1>
     
     <div class="form-group">
         <label>基础节点链接</label>
@@ -405,25 +420,25 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
     <div class="form-group" id="extUrlGroup" style="display: none;">
         <label>外部优选库接口 (API 或 TXT)</label>
         <select id="extUrlSelect" onchange="document.getElementById('extUrl').value = this.value" style="margin-bottom: 8px;">
-            <option value="https://cf.090227.xyz/ct?ips=6">📶 动态测速 API - 电信优先</option>
-            <option value="https://cf.090227.xyz/cu">📶 动态测速 API - 联通优先</option>
-            <option value="https://cf.090227.xyz/cmcc?ips=8">📶 动态测速 API - 移动优先</option>
-            <option value="https://cf.090227.xyz/CloudFlareYes">🌐 动态测速 API - 通用官方</option>
+            <option value="https://api.example.com/ct?ips=6">📶 动态测速 API - 电信优先</option>
+            <option value="https://api.example.com/cu">📶 动态测速 API - 联通优先</option>
+            <option value="https://api.example.com/cmcc?ips=8">📶 动态测速 API - 移动优先</option>
+            <option value="https://api.example.com/CloudFlareYes">🌐 动态测速 API - 通用官方</option>
             <option value="https://raw.githubusercontent.com/cmliu/WorkerVless2sub/main/addressesapi.txt">📦 静态 TXT 库 - cmliu (备用)</option>
             <option value="">✍️ 自定义：清空并手动输入链接...</option>
         </select>
-        <input type="text" id="extUrl" placeholder="请选择上方接口或粘贴你的链接..." value="https://cf.090227.xyz/ct?ips=6" autocomplete="off">
+        <input type="text" id="extUrl" placeholder="请选择上方接口或粘贴你的链接..." value="https://api.example.com/ct?ips=6" autocomplete="off">
     </div>
 
     <div class="form-group">
         <label>
             安全 Token (必填!)
-            <a href="https://t.me/ayonayo" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(前往获取)</a>
+            <a href="https://t.me/YOUR_TELEGRAM" target="_blank" style="font-size: 12px; color: #58a6ff; font-weight: normal; margin-left: 8px; text-decoration: none;">(前往获取)</a>
         </label>
         <input type="password" id="subToken" placeholder="防止接口被他人滥用生成订阅, 请输入" autocomplete="off">
     </div>
 
-    <button onclick="generateSub()" id="genBtn" style="margin-top:10px;">生成优选订阅</button>
+    <button onclick="generateSub()" id="genBtn" style="margin-top:10px;">生成优选短链</button>
     
     <div class="form-group" style="margin-top: 20px;">
         <label>您的专属订阅 ❗</label>
@@ -435,7 +450,7 @@ button:hover { background: rgba(29, 78, 216, 0.95); transform: translateY(-1px);
     </div>
 
     <div class="footer">
-        支持: <a href="https://t.me/mianfeicf" target="_blank" class="tg-link">加入tg群组获取最新动态</a> - 由群友Desire提供维护 &copy; 2026
+        支持: <a href="https://t.me/YOUR_GROUP" target="_blank" class="tg-link">加入tg群组获取最新动态</a> - 由 YOUR_NAME 提供维护 &copy; 2026
     </div>
 </div>
 <script>
@@ -444,7 +459,7 @@ function toggleExtInput() {
     document.getElementById('extUrlGroup').style.display = val === 'ext' ? 'block' : 'none';
 }
 
-function generateSub() {
+async function generateSub() {
     const link = document.getElementById('nodeLink').value.trim();
     const token = document.getElementById('subToken').value.trim();
     const source = document.getElementById('ipSource').value;
@@ -455,27 +470,52 @@ function generateSub() {
 
     const btn = document.getElementById('genBtn');
     btn.innerText = "生成中..."; btn.style.opacity = "0.7";
+    btn.disabled = true;
     
-    setTimeout(() => {
-        let subUrl = window.location.origin + '/sub?base=' + encodeURIComponent(link);
-        if(token) subUrl += '&token=' + encodeURIComponent(token);
-        if(source === 'ext') subUrl += '&source=ext&ext_url=' + encodeURIComponent(extUrl);
-        
-        document.getElementById('subResult').value = subUrl;
-        btn.innerText = "生成优选订阅"; btn.style.opacity = "1";
-        
-        const qrWrap = document.getElementById('qrWrap');
-        const qrCodeBox = document.getElementById('qrCodeBox');
-        qrCodeBox.innerHTML = ''; 
-        qrWrap.style.display = 'flex'; 
-        
-        new QRCode(qrCodeBox, {
-            text: subUrl, width: 180, height: 180,
-            colorDark : "#000000", colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.M
+    // 1. 拼接原有的参数
+    let subParams = '/sub?base=' + encodeURIComponent(link);
+    if(token) subParams += '&token=' + encodeURIComponent(token);
+    if(source === 'ext') subParams += '&source=ext&ext_url=' + encodeURIComponent(extUrl);
+    
+    try {
+        // 2. 调用 API 生成短链
+        const res = await fetch('/api/shorten', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ longUrl: subParams })
         });
-    }, 300);
+        const data = await res.json();
+
+        if (data.success) {
+            // 3. 组装最终的短链显示给用户
+            const shortUrl = window.location.origin + '/s/' + data.shortId;
+            document.getElementById('subResult').value = shortUrl;
+            
+            // 生成二维码
+            const qrWrap = document.getElementById('qrWrap');
+            const qrCodeBox = document.getElementById('qrCodeBox');
+            qrCodeBox.innerHTML = ''; 
+            qrWrap.style.display = 'flex'; 
+            
+            new QRCode(qrCodeBox, {
+                text: shortUrl, width: 180, height: 180,
+                colorDark : "#000000", colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.M
+            });
+        } else {
+            alert('生成短链失败: ' + (data.error || '未知错误'));
+            document.getElementById('subResult').value = window.location.origin + subParams; // 降级显示长链
+        }
+    } catch (e) {
+        alert('网络请求失败，请检查控制台。');
+        document.getElementById('subResult').value = window.location.origin + subParams; // 降级显示长链
+    } finally {
+        btn.innerText = "生成优选短链"; 
+        btn.style.opacity = "1";
+        btn.disabled = false;
+    }
 }
+
 function copyLink() {
     const res = document.getElementById('subResult');
     if(res.value) { res.select(); document.execCommand('copy'); alert('✅ 订阅链接已复制！快去客户端添加吧。'); }
@@ -590,10 +630,16 @@ button.page-btn.active{background:var(--blue); color:#fff; cursor:default; opaci
     <div style="background:var(--bg2); border-radius:var(--radius); padding:24px; width:100%; max-width:400px; border:1px solid var(--border); box-shadow: 0 4px 24px rgba(0,0,0,0.5);">
         <h2 style="margin-top:0; color:var(--fg); font-size:20px;">编辑节点信息</h2>
         <input id="editId" type="hidden">
+        
         <label style="display:block; font-size:13px; color:var(--fg2); margin-bottom:6px;">IP 和 端口</label>
         <input id="editIp" placeholder="例如 104.16.2.3:443" style="margin-bottom:16px;">
+        
         <label style="display:block; font-size:13px; color:var(--fg2); margin-bottom:6px;">备注名称</label>
-        <input id="editName" placeholder="例如 香港优选 (选填)" style="margin-bottom:8px;">
+        <input id="editName" placeholder="例如 香港优选 (选填)" style="margin-bottom:16px;">
+        
+        <label style="display:block; font-size:13px; color:var(--fg2); margin-bottom:6px;">排序权重 (越小越靠前，置顶可填 0 或 -1)</label>
+        <input id="editPriority" type="number" placeholder="数字越小越靠前" style="margin-bottom:8px;">
+
         <div style="display:flex; gap:10px; margin-top:20px;">
             <button style="flex:1;" onclick="saveEdit()">保存修改</button>
             <button style="flex:1;" class="sec" onclick="closeEdit()">取消</button>
@@ -638,7 +684,7 @@ const load = async () => {
                 </div>
             </div>
             <div style="display:flex; gap:6px; flex-wrap:wrap; width:100%; justify-content: flex-end;">
-                <button class="sec" onclick="openEdit(\${ip.id}, '\${ip.displayIp}', '\${ip.port}', '\${ip.name || ''}')">编辑</button>
+                <button class="sec" onclick="openEdit(\${ip.id}, '\${ip.displayIp}', '\${ip.port}', '\${ip.name || ''}', \${ip.priority || 0})">编辑</button>
                 <button class="sec" onclick="toggleIp(\${ip.id}, \${ip.active})">\${ip.active?'禁用':'启用'}</button>
                 <button class="danger" onclick="del(\${ip.id})">删除</button>
             </div>
@@ -679,13 +725,35 @@ const poll = (id, cb) => {
 };
 
 const toggleIp = async (id, currentStatus) => { await api('/ips/'+id, {method:'PUT', body:JSON.stringify({active: currentStatus ? 0 : 1})}); load(); };
-const openEdit = (id, ip, port, name) => { $('editId').value = id; $('editIp').value = ip + ':' + port; $('editName').value = name; $('editModal').style.display = 'flex'; };
+const openEdit = (id, ip, port, name, priority) => { 
+    $('editId').value = id; 
+    $('editIp').value = ip + ':' + port; 
+    $('editName').value = name; 
+    $('editPriority').value = priority; // 新增：将权重回显到输入框
+    $('editModal').style.display = 'flex'; 
+};
 const closeEdit = () => { $('editModal').style.display = 'none'; };
 const saveEdit = async () => {
-    const id = $('editId').value, ipStr = $('editIp').value.trim(), nameStr = $('editName').value.trim();
+    const id = $('editId').value;
+    const ipStr = $('editIp').value.trim();
+    const nameStr = $('editName').value.trim();
+    const priorityVal = parseInt($('editPriority').value); // 读取权重输入框的值
+
     if(!ipStr) return msg('IP不能为空');
     let fullIP = ipStr; if(nameStr) fullIP += '#' + nameStr;
-    try { await api('/ips/'+id, {method:'PUT', body:JSON.stringify({ip: fullIP})}); msg('修改成功'); closeEdit(); load(); } catch(e) { msg('修改失败，格式错误'); }
+
+    // 构造发送给后端的数据包
+    const updateBody = { ip: fullIP };
+    if (!isNaN(priorityVal)) updateBody.priority = priorityVal; 
+
+    try { 
+        await api('/ips/'+id, {method:'PUT', body:JSON.stringify(updateBody)}); 
+        msg('修改成功'); 
+        closeEdit(); 
+        load(); 
+    } catch(e) { 
+        msg('修改失败，格式错误'); 
+    }
 };
 const del = async (id) => { if(confirm('确定要彻底删除此IP吗？')) { await api('/ips/'+id, {method:'DELETE'}); load(); } };
 
@@ -733,9 +801,23 @@ export default {
         const url = new URL(req.url);
         const path = url.pathname;
 
+        // --- 【新增】处理短链跳转 (公开接口，无密码拦截) ---
+        if (path.startsWith('/s/')) {
+            const shortId = path.slice(3); // 截取 /s/ 后面的字符
+            if (env.TASK_KV) {
+                const longUrl = await env.TASK_KV.get(`short:${shortId}`);
+                if (longUrl) {
+                    // 使用 302 重定向到真实的 /sub 长链接，并将原长链自动拼在域名后
+                    return Response.redirect(new URL(longUrl, url.origin).toString(), 302);
+                }
+            }
+            return new Response('❌ 短链接无效或已过期', { status: 404, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+        }
+
         // 安全拦截区
         if (path === '/admin' || path.startsWith('/api/')) {
-            if (!checkAuth(req, env)) {
+            // 放行公开的 /api/shorten 接口，避免前端无法生成短链
+            if (path !== '/api/shorten' && !checkAuth(req, env)) {
                 return new Response('Unauthorized', {
                     status: 401,
                     headers: { 'WWW-Authenticate': 'Basic realm="Admin Access Requires Password"' }
